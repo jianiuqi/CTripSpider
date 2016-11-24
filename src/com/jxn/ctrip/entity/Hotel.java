@@ -4,11 +4,15 @@ public class Hotel {
 
 	private String id;
 	
+	private String city_id;
+	
+	private String city_name;
+	
 	private String name;
 	
-	private String lat;
+	private double lat;
 	
-	private String lon;
+	private double lon;
 	
 	private String url;
 	
@@ -44,6 +48,22 @@ public class Hotel {
 		this.id = id;
 	}
 
+	public String getCity_id() {
+		return city_id;
+	}
+
+	public void setCity_id(String city_id) {
+		this.city_id = city_id;
+	}
+
+	public String getCity_name() {
+		return city_name;
+	}
+
+	public void setCity_name(String city_name) {
+		this.city_name = city_name;
+	}
+
 	public String getName() {
 		return name;
 	}
@@ -52,19 +72,19 @@ public class Hotel {
 		this.name = name;
 	}
 
-	public String getLat() {
+	public double getLat() {
 		return lat;
 	}
 
-	public void setLat(String lat) {
+	public void setLat(double lat) {
 		this.lat = lat;
 	}
 
-	public String getLon() {
+	public double getLon() {
 		return lon;
 	}
 
-	public void setLon(String lon) {
+	public void setLon(double lon) {
 		this.lon = lon;
 	}
 
@@ -140,11 +160,11 @@ public class Hotel {
 		this.shortName = shortName;
 	}
 
-	public boolean isSingleRec() {
+	public boolean getIsSingleRec() {
 		return isSingleRec;
 	}
 
-	public void setSingleRec(boolean isSingleRec) {
+	public void setIsSingleRec(boolean isSingleRec) {
 		this.isSingleRec = isSingleRec;
 	}
 	

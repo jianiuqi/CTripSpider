@@ -62,7 +62,10 @@ public class HotelCitySpider {
 		// 连接数据库
 		Connection conn = SqlDBUtils.getConnection();
 		StringBuilder create_table_sql = new StringBuilder();
-		create_table_sql.append("create table if not exists ctrip_hotel_city (id integer primary key auto_increment, city_id integer not null, city_name varchar(255) not null, head_pinyin varchar(80) not null, pinyin varchar(255) not null)");
+		create_table_sql.append("create table if not exists ctrip_hotel_city "
+				+ "(id integer primary key auto_increment, city_id integer not null, "
+				+ "city_name varchar(255) not null, head_pinyin varchar(80) not null, "
+				+ "pinyin varchar(255) not null, UNIQUE (city_id))");
 		PreparedStatement preparedStatement = null;
 		try {
 			preparedStatement = conn.prepareStatement("DROP TABLE IF EXISTS ctrip_hotel_city");
@@ -77,8 +80,12 @@ public class HotelCitySpider {
 				insert_sql.append(", '" + city.getHeadPinyin() + "'");
 				//此处注意汉语拼音中会有'，直接插入数据库会报错，要把一个'替换为两个''
 				insert_sql.append(", '" + city.getPinyin().replace("'", "''") + "')");
-				preparedStatement = conn.prepareStatement(insert_sql.toString());
-				preparedStatement.execute();
+				try {
+					preparedStatement = conn.prepareStatement(insert_sql.toString());
+					preparedStatement.execute();
+				} catch (SQLException e) {
+					continue;
+				}
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
