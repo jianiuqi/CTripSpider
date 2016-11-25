@@ -22,7 +22,7 @@ public class HotelSpider {
 	Connection conn = null;
 	PreparedStatement preparedStatement = null;
 	
-	boolean DEBUG = false;
+	boolean DEBUG = true;
 	
 	public static void main(String[] args) {
 		long startTime = System.currentTimeMillis();
@@ -30,13 +30,13 @@ public class HotelSpider {
 		HotelSpider spider = new HotelSpider();
 		List<HotelCity> cities = citySpider.getHotelCities();
 		long getCityTime = System.currentTimeMillis();
-		System.out.println("getCityTime:" + (getCityTime - startTime));
+		System.out.println("获取城市所用时间(ms):" + (getCityTime - startTime));
 		spider.createTable();
 		for (HotelCity hotelCity : cities) {
 			spider.saveHotels(hotelCity, spider.getHotelList(hotelCity));
 		}
 		long saveHotelTime = System.currentTimeMillis();
-		System.out.println("saveHotelTime:" + (saveHotelTime - startTime));
+		System.out.println("获取酒店并存储所用时间(ms):" + (saveHotelTime - startTime));
 	}
 	
 	/**
@@ -60,16 +60,17 @@ public class HotelSpider {
 				hotels.addAll(JSON.parseArray(hotelResultObj.getString("hotelPositionJSON"), Hotel.class));
 			} catch (Exception e) {
 				e.printStackTrace();
-				File file = new File("file/testdata.txt");
-				FileOutputStream fos;
-				try {
-					fos = new FileOutputStream(file);
-					fos.write(hotelResult.getBytes());
-					fos.flush();
-					fos.close();
-				} catch (Exception e1) {
-					// TODO Auto-generated catch block
-					e1.printStackTrace();
+				if (DEBUG) {
+					File file = new File("file/testdata.txt");
+					FileOutputStream fos;
+					try {
+						fos = new FileOutputStream(file);
+						fos.write(hotelResult.getBytes());
+						fos.flush();
+						fos.close();
+					} catch (Exception e1) {
+						e1.printStackTrace();
+					}
 				}
 			}
 		}
@@ -109,7 +110,7 @@ public class HotelSpider {
 			insert_sql.append("insert into ctrip_hotel "
 					+ "(hotel_id, city_id, city_name, name, lat, lon, url, img, address, score, dpscore, dpcount, star, stardesc, shortName, isSingleRec) values (");
 			insert_sql.append("'" + hotel.getId() + "'");
-			insert_sql.append(", '" + city.getCityId() + "'");
+			insert_sql.append(", " + city.getCityId());
 			insert_sql.append(", '" + city.getCityName() + "'");
 			insert_sql.append(", '" + hotel.getName() + "'");
 			insert_sql.append(", " + hotel.getLat());
@@ -131,6 +132,46 @@ public class HotelSpider {
 				e.getMessage();
 				continue;
 			}
+		}
+	}
+	
+	/**
+	 * 数据有重复unique约束，不可用
+	 * @param city
+	 * @param hotels
+	 */
+	public void saveBigHotels(HotelCity city, List<Hotel> hotels){
+		StringBuffer insert_sql = new StringBuffer();
+		insert_sql.append("insert into ctrip_hotel (hotel_id, city_id, city_name, "
+				+ "name, lat, lon, url, img, address, "
+				+ "score, dpscore, dpcount, star, stardesc, "
+				+ "shortName, isSingleRec) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+		try {
+			conn.setAutoCommit(false);
+			preparedStatement = conn.prepareStatement(insert_sql.toString()); 
+			for (Hotel hotel : hotels) {
+				preparedStatement.setString(1, hotel.getId());
+				preparedStatement.setInt(2, Integer.valueOf(city.getCityId()));
+				preparedStatement.setString(3, city.getCityName());
+				preparedStatement.setString(4, hotel.getName());
+				preparedStatement.setDouble(5, hotel.getLat());
+				preparedStatement.setDouble(6, hotel.getLon());
+				preparedStatement.setString(7, hotel.getUrl());
+				preparedStatement.setString(8, hotel.getImg());
+				preparedStatement.setString(9, hotel.getAddress());
+				preparedStatement.setDouble(10, hotel.getScore());
+				preparedStatement.setInt(11, hotel.getDpscore());
+				preparedStatement.setInt(12, hotel.getDpcount());
+				preparedStatement.setString(13, hotel.getStar());
+				preparedStatement.setString(14, hotel.getStardesc());
+				preparedStatement.setString(15, hotel.getShortName());
+				preparedStatement.setBoolean(16, hotel.getIsSingleRec());
+				preparedStatement.addBatch();
+			}
+			preparedStatement.executeBatch();
+			conn.commit();
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 	
@@ -220,6 +261,18 @@ public class HotelSpider {
 		params.put("contyped", "0");
 		params.put("productcode", "");
 		String result = HttpUtil.getInstance().httpPost(hotelUrl, params);
-		return result;
+		// 数据中有转义符直接转JSON报错，所以这里重新拼接所需要的JSON数据
+		String tempHotel = result.substring(result.indexOf("hotelPositionJSON")-1, result.length());
+		// 确保截取到的字符串是完整的所以用indexOf("}],"), 加2是因为需要]符号
+		String hotelArray = tempHotel.substring(0, tempHotel.indexOf("}],") + 2);
+		String tempTotalCount = result.substring(result.indexOf("hotelAmount")-1, result.length());
+		String totalCount = tempTotalCount.substring(0, tempTotalCount.indexOf(","));
+		StringBuffer sb = new StringBuffer();
+		sb.append("{");
+		sb.append(totalCount);
+		sb.append(",");
+		sb.append(hotelArray);
+		sb.append("}");
+		return sb.toString().replace("\\", "");
 	}
 }
