@@ -263,8 +263,8 @@ public class HotelSpider {
 		String result = HttpUtil.getInstance().httpPost(hotelUrl, params);
 		// 数据中有转义符直接转JSON报错，所以这里重新拼接所需要的JSON数据
 		String tempHotel = result.substring(result.indexOf("hotelPositionJSON")-1, result.length());
-		// 确保截取到的字符串是完整的所以用indexOf("}],"), 加2是因为需要]符号
-		String hotelArray = tempHotel.substring(0, tempHotel.indexOf("}],") + 2);
+		// 确保截取到indexOf("biRecord"), 减2是因为需要]符号
+		String hotelArray = tempHotel.substring(0, tempHotel.indexOf("biRecord") - 2);
 		String tempTotalCount = result.substring(result.indexOf("hotelAmount")-1, result.length());
 		String totalCount = tempTotalCount.substring(0, tempTotalCount.indexOf(","));
 		StringBuffer sb = new StringBuffer();
