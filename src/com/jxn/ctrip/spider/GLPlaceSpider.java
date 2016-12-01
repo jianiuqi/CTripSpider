@@ -1,5 +1,9 @@
 package com.jxn.ctrip.spider;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -11,6 +15,7 @@ import org.jsoup.select.Elements;
 
 import com.jxn.ctrip.entity.GLPlace;
 import com.jxn.ctrip.util.HttpUtil;
+import com.jxn.ctrip.util.SqlDBUtils;
 import com.jxn.ctrip.util.StringUtil;
 
 /**
@@ -20,12 +25,13 @@ public class GLPlaceSpider {
 
 	boolean DEBUG = false;
 	
+	Connection conn = null;
+	PreparedStatement preparedStatement = null;
+	
 	public static void main(String[] args) {
 		GLPlaceSpider spider = new GLPlaceSpider();
 		List<GLPlace> places = spider.getGLPlaces();
-		System.out.println(places.size());
-		spider.removeDuplicate(places);
-		System.out.println(places.size());
+		spider.saveGLPlace(places);
 	}
 	
 	public List<GLPlace> getGLPlaces() {
@@ -82,6 +88,7 @@ public class GLPlaceSpider {
 				count ++;
 			}
 		}
+		removeDuplicate(places);
 		return places;
 	}
 	
@@ -89,5 +96,67 @@ public class GLPlaceSpider {
 		HashSet<GLPlace> set = new HashSet<GLPlace>(list);   
 		list.clear();   
 		list.addAll(set);
+	}
+	
+	public void saveGLPlace(List<GLPlace> places) {
+		try {
+			conn = SqlDBUtils.getConnection();
+			preparedStatement = conn.prepareStatement("DROP TABLE IF EXISTS ctrip_gl_place");
+			preparedStatement.execute();
+			StringBuilder create_table_sql = new StringBuilder();
+			create_table_sql.append("create table if not exists ctrip_gl_place "
+					+ "(id integer primary key auto_increment, place_id varchar(255) not null, "
+					+ "province varchar(255), place varchar(255) not null, "
+					+ "pinyin varchar(255) not null, title varchar(255), href varchar(255), UNIQUE (place_id))");
+			preparedStatement = conn.prepareStatement(create_table_sql.toString());
+			preparedStatement.execute();
+		} catch (Exception e) {
+			// TODO: handle exception
+		}
+		StringBuffer insert_sql = new StringBuffer();
+		insert_sql.append("insert into ctrip_gl_place (place_id, province, place, pinyin, title, href) values (?, ?, ?, ?, ?, ?)");
+		try {
+			conn.setAutoCommit(false);
+			preparedStatement = conn.prepareStatement(insert_sql.toString());
+			for (GLPlace glPlace : places) {
+				preparedStatement.setString(1, glPlace.getPlace_code());
+				preparedStatement.setString(2, glPlace.getProvince());
+				preparedStatement.setString(3, glPlace.getPlace());
+				preparedStatement.setString(4, glPlace.getPinyin());
+				preparedStatement.setString(5, glPlace.getTitle());
+				preparedStatement.setString(6, glPlace.getHref());
+				preparedStatement.addBatch();
+			}
+			preparedStatement.executeBatch();
+			conn.commit();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	/**
+	 * 从数据库中取出攻略地点信息
+	 * @return
+	 */
+	public List<GLPlace> getDBGLPlaces(){
+		List<GLPlace> places = new ArrayList<GLPlace>();
+		Connection connection = SqlDBUtils.getConnection();
+		try {
+			PreparedStatement statement = connection.prepareStatement("SELECT * FROM ctrip_gl_place");
+			ResultSet resultSet = statement.executeQuery();
+			while (resultSet.next()) {
+				GLPlace place = new GLPlace();
+				place.setPlace_code(resultSet.getString("place_id"));
+				place.setProvince(resultSet.getString("province"));
+				place.setPlace(resultSet.getString("place"));
+				place.setPinyin(resultSet.getString("pinyin"));
+				place.setTitle(resultSet.getString("title"));
+				place.setHref(resultSet.getString("href"));
+				places.add(place);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return places;
 	}
 }

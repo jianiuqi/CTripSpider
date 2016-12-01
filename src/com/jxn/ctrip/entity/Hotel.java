@@ -39,6 +39,11 @@ public class Hotel {
 	private String shortName;
 	
 	private boolean isSingleRec;
+	
+	/**
+	 * 最低价格信息
+	 */
+	private double price;
 
 	public String getId() {
 		return id;
@@ -166,6 +171,14 @@ public class Hotel {
 
 	public void setIsSingleRec(boolean isSingleRec) {
 		this.isSingleRec = isSingleRec;
+	}
+
+	public double getPrice() {
+		return price;
+	}
+
+	public void setPrice(double price) {
+		this.price = price;
 	}
 	
 }

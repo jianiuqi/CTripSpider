@@ -2,6 +2,7 @@ package com.jxn.ctrip.spider;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -19,8 +20,10 @@ import com.jxn.ctrip.util.StringUtil;
 public class HotelCitySpider {
 
 	public static void main(String[] args) {
+		/* 需要重新获取酒店城市信息时开启
 		HotelCitySpider spider = new HotelCitySpider();
 		spider.saveHotelCities(spider.getHotelCities());
+		*/
 	}
 	
 	/**
@@ -90,5 +93,29 @@ public class HotelCitySpider {
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	/**
+	 * 从数据库中取出酒店城市信息
+	 * @return
+	 */
+	public List<HotelCity> getDBHotelCities(){
+		List<HotelCity> hotelCities = new ArrayList<HotelCity>();
+		Connection connection = SqlDBUtils.getConnection();
+		try {
+			PreparedStatement statement = connection.prepareStatement("SELECT * FROM ctrip_hotel_city");
+			ResultSet resultSet = statement.executeQuery();
+			while (resultSet.next()) {
+				HotelCity city = new HotelCity();
+				city.setCityId(String.valueOf(resultSet.getInt("city_id")));
+				city.setCityName(resultSet.getString("city_name"));
+				city.setHeadPinyin(resultSet.getString("head_pinyin"));
+				city.setPinyin(resultSet.getString("pinyin"));
+				hotelCities.add(city);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return hotelCities;
 	}
 }

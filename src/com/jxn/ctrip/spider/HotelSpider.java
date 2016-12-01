@@ -4,10 +4,16 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.select.Elements;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
@@ -27,16 +33,19 @@ public class HotelSpider {
 	public static void main(String[] args) {
 		long startTime = System.currentTimeMillis();
 		HotelCitySpider citySpider = new HotelCitySpider();
-		HotelSpider spider = new HotelSpider();
-		List<HotelCity> cities = citySpider.getHotelCities();
+		List<HotelCity> cities = citySpider.getDBHotelCities();
 		long getCityTime = System.currentTimeMillis();
 		System.out.println("获取城市所用时间(ms):" + (getCityTime - startTime));
+		HotelSpider spider = new HotelSpider();
+		/* 需要重新获取酒店数据时开启
 		spider.createTable();
 		for (HotelCity hotelCity : cities) {
 			spider.saveHotels(hotelCity, spider.getHotelList(hotelCity));
 		}
 		long saveHotelTime = System.currentTimeMillis();
 		System.out.println("获取酒店并存储所用时间(ms):" + (saveHotelTime - startTime));
+		*/
+		spider.getAndSaveHotelLowPrice();
 	}
 	
 	/**
@@ -274,5 +283,98 @@ public class HotelSpider {
 		sb.append(hotelArray);
 		sb.append("}");
 		return sb.toString().replace("\\", "");
+	}
+	
+	/**
+	 * 从数据库中取出酒店信息
+	 * @return
+	 */
+	public List<Hotel> getDBHotels(){
+		List<Hotel> hotels = new ArrayList<Hotel>();
+		Connection connection = SqlDBUtils.getConnection();
+		PreparedStatement statement = null;
+		ResultSet resultSet = null;
+		try {
+			statement = connection.prepareStatement("SELECT * FROM ctrip_hotel");
+			resultSet = statement.executeQuery();
+			while (resultSet.next()) {
+				Hotel hotel = new Hotel();
+				hotel.setId(resultSet.getString("hotel_id"));
+				hotel.setCity_id(String.valueOf(resultSet.getInt("city_id")));
+				hotels.add(hotel);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}finally {
+			SqlDBUtils.closeResources(connection, statement, resultSet);
+		}
+		return hotels;
+	}
+	
+	/**
+	 * 获取并保存酒店最低价格信息
+	 */
+	public void getAndSaveHotelLowPrice(){
+		Connection connection = SqlDBUtils.getConnection();
+		PreparedStatement statement = null;
+		ResultSet resultSet = null;
+		try {
+			String add_column = "SELECT * FROM information_schema.`COLUMNS` WHERE TABLE_NAME = 'ctrip_hotel' and COLUMN_NAME = 'price'";
+			statement = connection.prepareStatement(add_column);
+			resultSet = statement.executeQuery();
+			if (!resultSet.next()) { // 没有查询到该字段
+				statement = connection.prepareStatement("ALTER TABLE ctrip_hotel ADD COLUMN price double default 0");
+				statement.execute();
+			}
+			/*else {
+				statement = connection.prepareStatement("ALTER TABLE ctrip_hotel DROP COLUMN price");
+				statement.execute();
+			}*/
+			List<Hotel> hotels = getDBHotels();
+			for (Hotel hotel : hotels) {
+				HashMap<String, String> params = new HashMap<String, String>();
+				params.put("psid", "");
+				params.put("MasterHotelID", "371379");
+				params.put("hotel", "371379");
+				params.put("EDM", "F");
+				params.put("roomId", "");
+				params.put("IncludeRoom", "");
+				params.put("city", "59");
+				params.put("showspothotel", "T");
+				params.put("supplier", "");
+				params.put("IsDecoupleSpotHotelAndGroup", "F");
+				params.put("contrast", "0");
+				params.put("brand", "0");
+				params.put("startDate", "2016-12-02");
+				params.put("depDate", "2016-12-03");
+				params.put("IsFlash", "F");
+				params.put("RequestTravelMoney", "F");
+				params.put("hsids", "");
+				params.put("IsJustConfirm", "");
+				params.put("contyped", "0");
+				params.put("priceInfo", "-1");
+				params.put("equip", "");
+				params.put("filter", "");
+				params.put("productcode", "");
+				params.put("couponList", "");
+				params.put("abForHuaZhu", "");
+				params.put("eleven", "7f0630623f81c6e39ee97ac5387a633d");
+				params.put("callback", "CASPrfgwcYGoPzBNOKL");
+				params.put("_", "1480488589957");
+				String result = HttpUtil.getInstance().httpGet(params, "http://hotels.ctrip.com/Domestic/tool/AjaxHote1RoomListForDetai1.aspx");
+				System.out.println(result);
+				/*
+					try {
+						statement = connection.prepareStatement("UPDATE ctrip_hotel SET price = " + hotel.getPrice() 
+															+ " WHERE hotel_id = '" + hotel.getId() + "'");
+						statement.execute();
+					} catch (Exception e) {
+						e.printStackTrace();
+						continue;
+					}*/
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 }

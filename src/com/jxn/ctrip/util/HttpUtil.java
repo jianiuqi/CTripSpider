@@ -35,6 +35,8 @@ public class HttpUtil {
             connection.setRequestProperty("connection", "Keep-Alive");
             connection.setRequestProperty("user-agent",
                     "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1;SV1)");
+            connection.setConnectTimeout(120000);
+            connection.setReadTimeout(120000);
             connection.connect();
             reader = new BufferedReader(new InputStreamReader(
                     connection.getInputStream()));
@@ -69,6 +71,8 @@ public class HttpUtil {
             connection.setRequestMethod("POST");
             connection.setUseCaches(false);
             connection.setInstanceFollowRedirects(true);
+            connection.setConnectTimeout(120000);
+            connection.setReadTimeout(120000);
             // head
             connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
             connection.connect();
