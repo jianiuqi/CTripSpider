@@ -40,7 +40,9 @@ public class GoodSpider {
 		createTable();
 		for (GLPlace glPlace : places) {
 			try {
-				getGoods(glPlace);
+				 List<Good> goods = getGoods(glPlace);
+				// 每个地点存一次
+				saveGood(goods, glPlace);
 			} catch (Exception e) {
 				System.out.println(glPlace.getPlace());
 			}
@@ -93,7 +95,6 @@ public class GoodSpider {
 						suggestShoppings.put(href, title);
 					}
 				}
-				saveGood(good, place);
 				goods.add(good);
 			}
 		}
@@ -134,46 +135,48 @@ public class GoodSpider {
 		}
 	}
 	
-	public void saveGood(Good good, GLPlace place){
-		StringBuffer insert_sql = new StringBuffer();
-		insert_sql.append("insert into ctrip_good "
-				+ "(good_id, place_id, place_name, name, desc_info, detailUrl, imgUrls, suggestShoppings) values (");
-		insert_sql.append("'" + good.getGood_id() + "'");
-		insert_sql.append(",'" + place.getPlace_code() + "'");
-		insert_sql.append(", '" + place.getPlace() + "'");
-		insert_sql.append(", '" + good.getName() + "'");
-		insert_sql.append(", '" + good.getDesc_info()+ "'");
-		insert_sql.append(", '" + good.getDetailUrl() + "'");
-		// 保存url ;分隔
-		List<String> imgUrls = good.getImgUrls();
-		boolean isUrlAppend = false;
-		insert_sql.append(", '");
-		for (String url : imgUrls) {
-			if (isUrlAppend) {
-				insert_sql.append(";");
+	public void saveGood(List<Good> goods, GLPlace place){
+		for (Good good : goods) {
+			StringBuffer insert_sql = new StringBuffer();
+			insert_sql.append("insert into ctrip_good "
+					+ "(good_id, place_id, place_name, name, desc_info, detailUrl, imgUrls, suggestShoppings) values (");
+			insert_sql.append("'" + good.getGood_id() + "'");
+			insert_sql.append(",'" + place.getPlace_code() + "'");
+			insert_sql.append(", '" + place.getPlace() + "'");
+			insert_sql.append(", '" + good.getName() + "'");
+			insert_sql.append(", '" + good.getDesc_info()+ "'");
+			insert_sql.append(", '" + good.getDetailUrl() + "'");
+			// 保存url ;分隔
+			List<String> imgUrls = good.getImgUrls();
+			boolean isUrlAppend = false;
+			insert_sql.append(", '");
+			for (String url : imgUrls) {
+				if (isUrlAppend) {
+					insert_sql.append(";");
+				}
+				insert_sql.append(url);
+				isUrlAppend = true;
 			}
-			insert_sql.append(url);
-			isUrlAppend = true;
-		}
-		insert_sql.append("'");
-		// 保存suggestShoppings ;分隔
-		Map<String, String> suggestShoppings = good.getSuggestShoppings();
-		Set<Entry<String, String>> entrySet = suggestShoppings.entrySet();
-		boolean isAppend = false;
-		insert_sql.append(", '");
-		for (Entry<String, String> entry : entrySet) {
-			if (isAppend) {
-				insert_sql.append(";");	
+			insert_sql.append("'");
+			// 保存suggestShoppings ;分隔
+			Map<String, String> suggestShoppings = good.getSuggestShoppings();
+			Set<Entry<String, String>> entrySet = suggestShoppings.entrySet();
+			boolean isAppend = false;
+			insert_sql.append(", '");
+			for (Entry<String, String> entry : entrySet) {
+				if (isAppend) {
+					insert_sql.append(";");	
+				}
+				insert_sql.append(entry.getKey() + ":" + entry.getValue());
+				isAppend = true;
 			}
-			insert_sql.append(entry.getKey() + ":" + entry.getValue());
-			isAppend = true;
-		}
-		insert_sql.append("')");
-		try {
-			preparedStatement = conn.prepareStatement(insert_sql.toString());
-			preparedStatement.execute();
-		} catch (Exception e) {
-			e.getMessage();
+			insert_sql.append("')");
+			try {
+				preparedStatement = conn.prepareStatement(insert_sql.toString());
+				preparedStatement.execute();
+			} catch (Exception e) {
+				e.getMessage();
+			}
 		}
 	}
 }

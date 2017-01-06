@@ -37,7 +37,8 @@ public class ShoppingSpider {
 	public void saveShoppings(List<GLPlace> places){
 		createTable();
 		for (GLPlace glPlace : places) {
-			getShoppings(glPlace);
+			List<Shopping> shoppings = getShoppings(glPlace);
+			saveShopping(shoppings, glPlace);
 		}
 	}
 	
@@ -67,15 +68,15 @@ public class ShoppingSpider {
 					if (shopping_infos_ele.select("dt > a").size() > 0) {
 						String detailUrl = shopping_infos_ele.select("dt > a").first().attr("href");
 						shopping.setDetailUrl(detailUrl);// 详细地址页
-						String tempId = detailUrl.substring(detailUrl.lastIndexOf("/"));
+						String tempId = detailUrl.substring(detailUrl.lastIndexOf("/") + 1);
 						shopping.setShopping_id(tempId.substring(0, tempId.indexOf(".html")));// id
 						
 						// 获取详细页信息
 						String detailHtml = HttpUtil.getInstance().httpGet(null, "http://you.ctrip.com" + detailUrl);
 						Document detail_doc = Jsoup.parse(detailHtml);
 						// >从直接子元素中查找  空格是从所有子元素中查找
-						if (detail_doc.select(".dest_toptitle.detail_tt h1").size() > 0) {
-							String shopping_name = detail_doc.select(".dest_toptitle.detail_tt h1").first().html();
+						if (detail_doc.select(".dest_toptitle.detail_tt h1 > a").size() > 0) {
+							String shopping_name = detail_doc.select(".dest_toptitle.detail_tt h1 > a").first().ownText();
 							shopping.setName(shopping_name); // 名称
 						}
 						Elements rest_imgs_eles = detail_doc.select("div.carousel-inner > div.item img");
@@ -137,7 +138,6 @@ public class ShoppingSpider {
 						shopping.setLat(lat_lng[0]);
 						shopping.setLng(lat_lng[1]);
 					}
-					saveShopping(shopping, place);
 					shoppings.add(shopping);
 				}
 			}
@@ -170,7 +170,7 @@ public class ShoppingSpider {
 					+ "(id integer primary key auto_increment, shopping_id varchar(255) not null, "
 					+ "place_id varchar(255) not null, place_name varchar(255) not null, "
 					+ "name varchar(255) not null, address varchar(255), "
-					+ "score double, shopping_type varchar(255), tel varchar(255), open_time varchar(255) "
+					+ "score double, shopping_type varchar(255), tel varchar(255), open_time varchar(255), "
 					+ "dp_info text, desc_info text, lat double, lng double, "
 					+ "detailUrl varchar(255), imgUrls text, "
 					+ "suggestGoods text, UNIQUE (shopping_id))");
@@ -181,55 +181,57 @@ public class ShoppingSpider {
 		}
 	}
 	
-	public void saveShopping(Shopping shopping, GLPlace place){
-		StringBuffer insert_sql = new StringBuffer();
-		insert_sql.append("insert into ctrip_shopping "
-				+ "(shopping_id, place_id, place_name, name, address, score, shopping_type, "
-				+ "tel, open_time, dp_info, desc_info, lat, lng, detailUrl, imgUrls, suggestGoods) values (");
-		insert_sql.append("'" + shopping.getShopping_id() + "'");
-		insert_sql.append(",'" + place.getPlace_code() + "'");
-		insert_sql.append(", '" + place.getPlace() + "'");
-		insert_sql.append(", '" + shopping.getName() + "'");
-		insert_sql.append(", '" + shopping.getAddress()+ "'");
-		insert_sql.append(", " + shopping.getScore());
-		insert_sql.append(", '" + shopping.getShopping_type() + "'");
-		insert_sql.append(", '" + shopping.getTel() + "'");
-		insert_sql.append(", '" + shopping.getOpen_time() + "'");
-		insert_sql.append(", '" + shopping.getDp_info() + "'");
-		insert_sql.append(", '" + shopping.getDesc_info()+ "'");
-		insert_sql.append(", " + shopping.getLat());
-		insert_sql.append(", " + shopping.getLng());
-		insert_sql.append(", '" + shopping.getDetailUrl() + "'");
-		
-		List<String> imgUrls = shopping.getImgUrls();
-		boolean isUrlAppend = false;
-		insert_sql.append(", '");
-		for (String url : imgUrls) {
-			if (isUrlAppend) {
-				insert_sql.append(";");
+	public void saveShopping(List<Shopping> shoppings, GLPlace place){
+		for (Shopping shopping : shoppings) {
+			StringBuffer insert_sql = new StringBuffer();
+			insert_sql.append("insert into ctrip_shopping "
+					+ "(shopping_id, place_id, place_name, name, address, score, shopping_type, "
+					+ "tel, open_time, dp_info, desc_info, lat, lng, detailUrl, imgUrls, suggestGoods) values (");
+			insert_sql.append("'" + shopping.getShopping_id() + "'");
+			insert_sql.append(",'" + place.getPlace_code() + "'");
+			insert_sql.append(", '" + place.getPlace() + "'");
+			insert_sql.append(", '" + shopping.getName() + "'");
+			insert_sql.append(", '" + shopping.getAddress()+ "'");
+			insert_sql.append(", " + shopping.getScore());
+			insert_sql.append(", '" + shopping.getShopping_type() + "'");
+			insert_sql.append(", '" + shopping.getTel() + "'");
+			insert_sql.append(", '" + shopping.getOpen_time() + "'");
+			insert_sql.append(", '" + shopping.getDp_info() + "'");
+			insert_sql.append(", '" + shopping.getDesc_info()+ "'");
+			insert_sql.append(", " + shopping.getLat());
+			insert_sql.append(", " + shopping.getLng());
+			insert_sql.append(", '" + shopping.getDetailUrl() + "'");
+			
+			List<String> imgUrls = shopping.getImgUrls();
+			boolean isUrlAppend = false;
+			insert_sql.append(", '");
+			for (String url : imgUrls) {
+				if (isUrlAppend) {
+					insert_sql.append(";");
+				}
+				insert_sql.append(url);
+				isUrlAppend = true;
 			}
-			insert_sql.append(url);
-			isUrlAppend = true;
-		}
-		insert_sql.append("'");
-		
-		Map<String, String> suggestFoods = shopping.getSuggestGoods();
-		Set<Entry<String, String>> entrySet = suggestFoods.entrySet();
-		boolean isAppend = false;
-		insert_sql.append(", '");
-		for (Entry<String, String> entry : entrySet) {
-			if (isAppend) {
-				insert_sql.append(";");	
+			insert_sql.append("'");
+			
+			Map<String, String> suggestFoods = shopping.getSuggestGoods();
+			Set<Entry<String, String>> entrySet = suggestFoods.entrySet();
+			boolean isAppend = false;
+			insert_sql.append(", '");
+			for (Entry<String, String> entry : entrySet) {
+				if (isAppend) {
+					insert_sql.append(";");	
+				}
+				insert_sql.append(entry.getKey() + ":" + entry.getValue());
+				isAppend = true;
 			}
-			insert_sql.append(entry.getKey() + ":" + entry.getValue());
-			isAppend = true;
-		}
-		insert_sql.append("')");
-		try {
-			preparedStatement = conn.prepareStatement(insert_sql.toString());
-			preparedStatement.execute();
-		} catch (Exception e) {
-			e.getMessage();
+			insert_sql.append("')");
+			try {
+				preparedStatement = conn.prepareStatement(insert_sql.toString());
+				preparedStatement.execute();
+			} catch (Exception e) {
+				e.getMessage();
+			}
 		}
 	}
 	

@@ -159,4 +159,36 @@ public class GLPlaceSpider {
 		}
 		return places;
 	}
+	
+	/**
+	 * 从数据库中取出攻略地点信息
+	 * @param id
+	 * @return
+	 */
+	public List<GLPlace> getDBGLPlaces(int id){
+		List<GLPlace> places = new ArrayList<GLPlace>();
+		Connection connection = SqlDBUtils.getConnection();
+		PreparedStatement statement = null;
+		try {
+			if (id > 1) {
+				statement = connection.prepareStatement("SELECT * FROM ctrip_gl_place where id > " + id);
+			}else {
+				statement = connection.prepareStatement("SELECT * FROM ctrip_gl_place");
+			}
+			ResultSet resultSet = statement.executeQuery();
+			while (resultSet.next()) {
+				GLPlace place = new GLPlace();
+				place.setPlace_code(resultSet.getString("place_id"));
+				place.setProvince(resultSet.getString("province"));
+				place.setPlace(resultSet.getString("place"));
+				place.setPinyin(resultSet.getString("pinyin"));
+				place.setTitle(resultSet.getString("title"));
+				place.setHref(resultSet.getString("href"));
+				places.add(place);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return places;
+	}
 }

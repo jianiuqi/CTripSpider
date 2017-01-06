@@ -33,13 +33,22 @@ public class RestaurantSpider {
 	PreparedStatement preparedStatement = null;
 	
 	public static void main(String[] args) {
-		long startTime = System.currentTimeMillis();
 		RestaurantSpider spider = new RestaurantSpider();
 		GLPlaceSpider placeSpider = new GLPlaceSpider();
-		List<GLPlace> places = placeSpider.getDBGLPlaces();
-		spider.createTable();
+		List<GLPlace> places = placeSpider.getDBGLPlaces(1661);
+		spider.saveRestanrants(places);
+	}
+	
+	public RestaurantSpider(){
+		conn = SqlDBUtils.getConnection();
+	}
+	
+	public void saveRestanrants(List<GLPlace> places){
+		long startTime = System.currentTimeMillis();
+//		createTable();
 		for (GLPlace place : places) {
-			spider.getRestanrants(place);
+			List<Restaurant> restaurants = getRestanrants(place);
+			saveRestaurant(restaurants, place);
 		}
 		long endTime = System.currentTimeMillis();
 		System.out.println("获取饭店所用时间(ms):" + (endTime - startTime));
@@ -144,7 +153,6 @@ public class RestaurantSpider {
 					restaurant.setLat(lat_lng[0]);
 					restaurant.setLng(lat_lng[1]);
 				}
-				saveRestaurant(restaurant, place);
 				restaurants.add(restaurant);
 			}
 			// 下一页数据
@@ -168,7 +176,6 @@ public class RestaurantSpider {
 	 */
 	public void createTable() {
 		try {
-			conn = SqlDBUtils.getConnection();
 			preparedStatement = conn.prepareStatement("DROP TABLE IF EXISTS ctrip_restaurant");
 			preparedStatement.execute();
 			StringBuilder create_table_sql = new StringBuilder();
@@ -187,56 +194,58 @@ public class RestaurantSpider {
 		}
 	}
 	
-	public void saveRestaurant(Restaurant restaurant, GLPlace place){
-		StringBuffer insert_sql = new StringBuffer();
-		insert_sql.append("insert into ctrip_restaurant "
-				+ "(restaurant_id, place_id, place_name, name, avgPrice, foodType, tel, address, "
-				+ "openTime, desc_info, detail, famous, score, lat, lng, "
-				+ "detailUrl, suggestFoods, imgUrls) values (");
-		insert_sql.append("'" + restaurant.getRestaurant_id() + "'");
-		insert_sql.append(",'" + place.getPlace_code() + "'");
-		insert_sql.append(", '" + place.getPlace() + "'");
-		insert_sql.append(", '" + restaurant.getName() + "'");
-		insert_sql.append(", " + restaurant.getAvgPrice());
-		insert_sql.append(", '" + restaurant.getFoodType() + "'");
-		insert_sql.append(", '" + restaurant.getTel() + "'");
-		insert_sql.append(", '" + restaurant.getAddress() + "'");
-		insert_sql.append(", '" + restaurant.getOpenTime() + "'");
-		insert_sql.append(", '" + restaurant.getDesc_info() + "'");
-		insert_sql.append(", '" + restaurant.getDetail()+ "'");
-		insert_sql.append(", '" + restaurant.getFamous() + "'");
-		insert_sql.append(", " + restaurant.getScore());
-		insert_sql.append(", " + restaurant.getLat());
-		insert_sql.append(", " + restaurant.getLng());
-		insert_sql.append(", '" + restaurant.getDetailUrl() + "'");
-		Map<String, String> suggestFoods = restaurant.getSuggestFoods();
-		Set<Entry<String, String>> entrySet = suggestFoods.entrySet();
-		boolean isAppend = false;
-		insert_sql.append(", '");
-		for (Entry<String, String> entry : entrySet) {
-			if (isAppend) {
-				insert_sql.append(";");	
+	public void saveRestaurant(List<Restaurant> restaurants, GLPlace place){
+		for (Restaurant restaurant : restaurants) {
+			StringBuffer insert_sql = new StringBuffer();
+			insert_sql.append("insert into ctrip_restaurant "
+					+ "(restaurant_id, place_id, place_name, name, avgPrice, foodType, tel, address, "
+					+ "openTime, desc_info, detail, famous, score, lat, lng, "
+					+ "detailUrl, suggestFoods, imgUrls) values (");
+			insert_sql.append("'" + restaurant.getRestaurant_id() + "'");
+			insert_sql.append(",'" + place.getPlace_code() + "'");
+			insert_sql.append(", '" + place.getPlace() + "'");
+			insert_sql.append(", '" + restaurant.getName() + "'");
+			insert_sql.append(", " + restaurant.getAvgPrice());
+			insert_sql.append(", '" + restaurant.getFoodType() + "'");
+			insert_sql.append(", '" + restaurant.getTel() + "'");
+			insert_sql.append(", '" + restaurant.getAddress() + "'");
+			insert_sql.append(", '" + restaurant.getOpenTime() + "'");
+			insert_sql.append(", '" + restaurant.getDesc_info() + "'");
+			insert_sql.append(", '" + restaurant.getDetail()+ "'");
+			insert_sql.append(", '" + restaurant.getFamous() + "'");
+			insert_sql.append(", " + restaurant.getScore());
+			insert_sql.append(", " + restaurant.getLat());
+			insert_sql.append(", " + restaurant.getLng());
+			insert_sql.append(", '" + restaurant.getDetailUrl() + "'");
+			Map<String, String> suggestFoods = restaurant.getSuggestFoods();
+			Set<Entry<String, String>> entrySet = suggestFoods.entrySet();
+			boolean isAppend = false;
+			insert_sql.append(", '");
+			for (Entry<String, String> entry : entrySet) {
+				if (isAppend) {
+					insert_sql.append(";");	
+				}
+				insert_sql.append(entry.getKey() + ":" + entry.getValue());
+				isAppend = true;
 			}
-			insert_sql.append(entry.getKey() + ":" + entry.getValue());
-			isAppend = true;
-		}
-		insert_sql.append("'");
-		List<String> imgUrls = restaurant.getImgUrls();
-		boolean isUrlAppend = false;
-		insert_sql.append(", '");
-		for (String url : imgUrls) {
-			if (isUrlAppend) {
-				insert_sql.append(";");
+			insert_sql.append("'");
+			List<String> imgUrls = restaurant.getImgUrls();
+			boolean isUrlAppend = false;
+			insert_sql.append(", '");
+			for (String url : imgUrls) {
+				if (isUrlAppend) {
+					insert_sql.append(";");
+				}
+				insert_sql.append(url);
+				isUrlAppend = true;
 			}
-			insert_sql.append(url);
-			isUrlAppend = true;
-		}
-		insert_sql.append("')");
-		try {
-			preparedStatement = conn.prepareStatement(insert_sql.toString());
-			preparedStatement.execute();
-		} catch (Exception e) {
-			e.getMessage();
+			insert_sql.append("')");
+			try {
+				preparedStatement = conn.prepareStatement(insert_sql.toString());
+				preparedStatement.execute();
+			} catch (Exception e) {
+				e.getMessage();
+			}
 		}
 	}
 	

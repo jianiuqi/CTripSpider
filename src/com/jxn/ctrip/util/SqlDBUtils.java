@@ -8,7 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 
 public class SqlDBUtils {
-	private static String url = "jdbc:mysql://localhost:3306/travelplus?useUnicode=true&characterEncoding=UTF-8";
+	private static String url = "jdbc:mysql://localhost:3306/travelplus?useServerPrepStmts=false&rewriteBatchedStatements=true&useUnicode=true&characterEncoding=UTF-8";
 	private static String user = "root";
 	private static String psw = "123456";
 

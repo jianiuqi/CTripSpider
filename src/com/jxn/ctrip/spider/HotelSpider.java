@@ -9,13 +9,9 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.select.Elements;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.jxn.ctrip.entity.Hotel;
 import com.jxn.ctrip.entity.HotelCity;
@@ -30,22 +26,25 @@ public class HotelSpider {
 	
 	boolean DEBUG = true;
 	
+	public HotelSpider(){
+		conn = SqlDBUtils.getConnection();
+	}
+	
 	public static void main(String[] args) {
-		long startTime = System.currentTimeMillis();
 		HotelCitySpider citySpider = new HotelCitySpider();
-		List<HotelCity> cities = citySpider.getDBHotelCities();
-		long getCityTime = System.currentTimeMillis();
-		System.out.println("获取城市所用时间(ms):" + (getCityTime - startTime));
+		List<HotelCity> cities = citySpider.getDBHotelCities(0);
 		HotelSpider spider = new HotelSpider();
-		/* 需要重新获取酒店数据时开启
-		spider.createTable();
+		spider.saveHotels(cities);
+	}
+	
+	public void saveHotels(List<HotelCity> cities){
+		long startTime = System.currentTimeMillis();
+		createTable();
 		for (HotelCity hotelCity : cities) {
-			spider.saveHotels(hotelCity, spider.getHotelList(hotelCity));
+			saveHotels(hotelCity, getHotelList(hotelCity));
 		}
-		long saveHotelTime = System.currentTimeMillis();
-		System.out.println("获取酒店并存储所用时间(ms):" + (saveHotelTime - startTime));
-		*/
-		spider.getAndSaveHotelLowPrice();
+		long endTime = System.currentTimeMillis();
+		System.out.println("获取酒店并存储所用时间(ms):" + (endTime - startTime));
 	}
 	
 	/**
@@ -66,7 +65,26 @@ public class HotelSpider {
 			// 解析酒店数据
 			try {
 				JSONObject hotelResultObj = JSONObject.parseObject(hotelResult);
-				hotels.addAll(JSON.parseArray(hotelResultObj.getString("hotelPositionJSON"), Hotel.class));
+				List<Hotel> pageHotels = JSON.parseArray(hotelResultObj.getString("hotelPositionJSON"), Hotel.class);
+				// 增加价格数据
+				JSONArray hotelsPrice = hotelResultObj.getJSONArray("htllist");
+				if (hotelsPrice != null && !hotelsPrice.isEmpty()) {
+					for (int j = 0; j < pageHotels.size(); j++) {
+						JSONObject priceObj = hotelsPrice.getJSONObject(j);
+						if (priceObj != null && !priceObj.isEmpty()) {
+							Hotel hotel = pageHotels.get(j);
+							String hotelId = priceObj.getString("hotelid");
+							double price = 0;
+							try {
+								price = priceObj.getDoubleValue("amount");
+							} catch (Exception e) { }
+							if (hotel.getId().equals(hotelId)) {
+								hotel.setPrice(price);
+							}
+						}
+					}
+				}
+				hotels.addAll(pageHotels);
 			} catch (Exception e) {
 				e.printStackTrace();
 				if (DEBUG) {
@@ -91,13 +109,12 @@ public class HotelSpider {
 	 */
 	public void createTable() {
 		try {
-			conn = SqlDBUtils.getConnection();
 			preparedStatement = conn.prepareStatement("DROP TABLE IF EXISTS ctrip_hotel");
 			preparedStatement.execute();
 			StringBuilder create_table_sql = new StringBuilder();
 			create_table_sql.append("create table if not exists ctrip_hotel "
 					+ "(id integer primary key auto_increment, hotel_id varchar(255) not null, city_id integer not null, city_name varchar(255) not null, "
-					+ "name varchar(255) not null, lat double not null, lon double not null, url varchar(255) not null, "
+					+ "name varchar(255) not null, price double, lat double not null, lon double not null, url varchar(255) not null, "
 					+ "img varchar(255) not null, address varchar(255) not null, score double not null, "
 					+ "dpscore int not null, dpcount int not null, star varchar(255) not null, "
 					+ "stardesc varchar(255) not null, shortName varchar(255) not null, isSingleRec tinyint(1), UNIQUE (hotel_id))");
@@ -117,11 +134,12 @@ public class HotelSpider {
 		for (Hotel hotel : hotels) {
 			StringBuffer insert_sql = new StringBuffer();
 			insert_sql.append("insert into ctrip_hotel "
-					+ "(hotel_id, city_id, city_name, name, lat, lon, url, img, address, score, dpscore, dpcount, star, stardesc, shortName, isSingleRec) values (");
+					+ "(hotel_id, city_id, city_name, name, price, lat, lon, url, img, address, score, dpscore, dpcount, star, stardesc, shortName, isSingleRec) values (");
 			insert_sql.append("'" + hotel.getId() + "'");
 			insert_sql.append(", " + city.getCityId());
 			insert_sql.append(", '" + city.getCityName() + "'");
 			insert_sql.append(", '" + hotel.getName() + "'");
+			insert_sql.append(", " + hotel.getPrice());
 			insert_sql.append(", " + hotel.getLat());
 			insert_sql.append(", " + hotel.getLon());
 			insert_sql.append(", '" + hotel.getUrl() + "'");
@@ -152,9 +170,9 @@ public class HotelSpider {
 	public void saveBigHotels(HotelCity city, List<Hotel> hotels){
 		StringBuffer insert_sql = new StringBuffer();
 		insert_sql.append("insert into ctrip_hotel (hotel_id, city_id, city_name, "
-				+ "name, lat, lon, url, img, address, "
+				+ "name, price, lat, lon, url, img, address, "
 				+ "score, dpscore, dpcount, star, stardesc, "
-				+ "shortName, isSingleRec) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+				+ "shortName, isSingleRec) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 		try {
 			conn.setAutoCommit(false);
 			preparedStatement = conn.prepareStatement(insert_sql.toString()); 
@@ -163,18 +181,19 @@ public class HotelSpider {
 				preparedStatement.setInt(2, Integer.valueOf(city.getCityId()));
 				preparedStatement.setString(3, city.getCityName());
 				preparedStatement.setString(4, hotel.getName());
-				preparedStatement.setDouble(5, hotel.getLat());
-				preparedStatement.setDouble(6, hotel.getLon());
-				preparedStatement.setString(7, hotel.getUrl());
-				preparedStatement.setString(8, hotel.getImg());
-				preparedStatement.setString(9, hotel.getAddress());
-				preparedStatement.setDouble(10, hotel.getScore());
-				preparedStatement.setInt(11, hotel.getDpscore());
-				preparedStatement.setInt(12, hotel.getDpcount());
-				preparedStatement.setString(13, hotel.getStar());
-				preparedStatement.setString(14, hotel.getStardesc());
-				preparedStatement.setString(15, hotel.getShortName());
-				preparedStatement.setBoolean(16, hotel.getIsSingleRec());
+				preparedStatement.setDouble(5, hotel.getPrice());
+				preparedStatement.setDouble(6, hotel.getLat());
+				preparedStatement.setDouble(7, hotel.getLon());
+				preparedStatement.setString(8, hotel.getUrl());
+				preparedStatement.setString(9, hotel.getImg());
+				preparedStatement.setString(10, hotel.getAddress());
+				preparedStatement.setDouble(11, hotel.getScore());
+				preparedStatement.setInt(12, hotel.getDpscore());
+				preparedStatement.setInt(13, hotel.getDpcount());
+				preparedStatement.setString(14, hotel.getStar());
+				preparedStatement.setString(15, hotel.getStardesc());
+				preparedStatement.setString(16, hotel.getShortName());
+				preparedStatement.setBoolean(17, hotel.getIsSingleRec());
 				preparedStatement.addBatch();
 			}
 			preparedStatement.executeBatch();
@@ -270,17 +289,40 @@ public class HotelSpider {
 		params.put("contyped", "0");
 		params.put("productcode", "");
 		String result = HttpUtil.getInstance().httpPost(hotelUrl, params);
+		
 		// 数据中有转义符直接转JSON报错，所以这里重新拼接所需要的JSON数据
 		String tempHotel = result.substring(result.indexOf("hotelPositionJSON")-1, result.length());
 		// 确保截取到indexOf("biRecord"), 减2是因为需要]符号
 		String hotelArray = tempHotel.substring(0, tempHotel.indexOf("biRecord") - 2);
 		String tempTotalCount = result.substring(result.indexOf("hotelAmount")-1, result.length());
 		String totalCount = tempTotalCount.substring(0, tempTotalCount.indexOf(","));
+		// 截取酒店价格数据
+		String price = "";
+		try {
+			price = result.substring(result.indexOf("htllist\":\"[{")-1, result.indexOf("]\",\"spreadhotel\"") + 2);
+		} catch (Exception e) {
+			if (DEBUG) {
+				File file = new File("file/test.json");
+				FileOutputStream fos;
+				try {
+					fos = new FileOutputStream(file);
+					fos.write(result.getBytes());
+					fos.flush();
+					fos.close();
+				} catch (Exception e1) {
+					e1.printStackTrace();
+				}
+			}
+		}
 		StringBuffer sb = new StringBuffer();
 		sb.append("{");
 		sb.append(totalCount);
 		sb.append(",");
 		sb.append(hotelArray);
+		if (!"".equals(price)) {
+			sb.append(",");
+			sb.append(price.replace("\"[{", "[{").replace("}]\"", "}]"));
+		}
 		sb.append("}");
 		return sb.toString().replace("\\", "");
 	}
@@ -305,76 +347,8 @@ public class HotelSpider {
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
-		}finally {
-			SqlDBUtils.closeResources(connection, statement, resultSet);
 		}
 		return hotels;
 	}
 	
-	/**
-	 * 获取并保存酒店最低价格信息
-	 */
-	public void getAndSaveHotelLowPrice(){
-		Connection connection = SqlDBUtils.getConnection();
-		PreparedStatement statement = null;
-		ResultSet resultSet = null;
-		try {
-			String add_column = "SELECT * FROM information_schema.`COLUMNS` WHERE TABLE_NAME = 'ctrip_hotel' and COLUMN_NAME = 'price'";
-			statement = connection.prepareStatement(add_column);
-			resultSet = statement.executeQuery();
-			if (!resultSet.next()) { // 没有查询到该字段
-				statement = connection.prepareStatement("ALTER TABLE ctrip_hotel ADD COLUMN price double default 0");
-				statement.execute();
-			}
-			/*else {
-				statement = connection.prepareStatement("ALTER TABLE ctrip_hotel DROP COLUMN price");
-				statement.execute();
-			}*/
-			List<Hotel> hotels = getDBHotels();
-			for (Hotel hotel : hotels) {
-				HashMap<String, String> params = new HashMap<String, String>();
-				params.put("psid", "");
-				params.put("MasterHotelID", "371379");
-				params.put("hotel", "371379");
-				params.put("EDM", "F");
-				params.put("roomId", "");
-				params.put("IncludeRoom", "");
-				params.put("city", "59");
-				params.put("showspothotel", "T");
-				params.put("supplier", "");
-				params.put("IsDecoupleSpotHotelAndGroup", "F");
-				params.put("contrast", "0");
-				params.put("brand", "0");
-				params.put("startDate", "2016-12-02");
-				params.put("depDate", "2016-12-03");
-				params.put("IsFlash", "F");
-				params.put("RequestTravelMoney", "F");
-				params.put("hsids", "");
-				params.put("IsJustConfirm", "");
-				params.put("contyped", "0");
-				params.put("priceInfo", "-1");
-				params.put("equip", "");
-				params.put("filter", "");
-				params.put("productcode", "");
-				params.put("couponList", "");
-				params.put("abForHuaZhu", "");
-				params.put("eleven", "7f0630623f81c6e39ee97ac5387a633d");
-				params.put("callback", "CASPrfgwcYGoPzBNOKL");
-				params.put("_", "1480488589957");
-				String result = HttpUtil.getInstance().httpGet(params, "http://hotels.ctrip.com/Domestic/tool/AjaxHote1RoomListForDetai1.aspx");
-				System.out.println(result);
-				/*
-					try {
-						statement = connection.prepareStatement("UPDATE ctrip_hotel SET price = " + hotel.getPrice() 
-															+ " WHERE hotel_id = '" + hotel.getId() + "'");
-						statement.execute();
-					} catch (Exception e) {
-						e.printStackTrace();
-						continue;
-					}*/
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
 }

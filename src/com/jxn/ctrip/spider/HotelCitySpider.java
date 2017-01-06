@@ -99,11 +99,16 @@ public class HotelCitySpider {
 	 * 从数据库中取出酒店城市信息
 	 * @return
 	 */
-	public List<HotelCity> getDBHotelCities(){
+	public List<HotelCity> getDBHotelCities(int id){
 		List<HotelCity> hotelCities = new ArrayList<HotelCity>();
 		Connection connection = SqlDBUtils.getConnection();
+		PreparedStatement statement = null;
 		try {
-			PreparedStatement statement = connection.prepareStatement("SELECT * FROM ctrip_hotel_city");
+			if (id > 1) {
+				statement = connection.prepareStatement("SELECT * FROM ctrip_hotel_city where id > " + id);
+			}else {
+				statement = connection.prepareStatement("SELECT * FROM ctrip_hotel_city");
+			}
 			ResultSet resultSet = statement.executeQuery();
 			while (resultSet.next()) {
 				HotelCity city = new HotelCity();

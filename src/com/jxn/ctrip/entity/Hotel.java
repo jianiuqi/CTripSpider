@@ -10,6 +10,11 @@ public class Hotel {
 	
 	private String name;
 	
+	/**
+	 * 最低价格信息
+	 */
+	private double price;
+	
 	private double lat;
 	
 	private double lon;
@@ -40,11 +45,6 @@ public class Hotel {
 	
 	private boolean isSingleRec;
 	
-	/**
-	 * 最低价格信息
-	 */
-	private double price;
-
 	public String getId() {
 		return id;
 	}
